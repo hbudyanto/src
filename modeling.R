@@ -44,7 +44,7 @@ trans$discount_percent[is.na(trans$discount_percent)] <- 0
 #### Random select smaller set of 2014 customers for faster simulation (temp)
 # filter customer in the year of 2014 
 cust14 <- unique(trans[which(year(trans$order_date) == 2014),c("customer_id")])
-set.seed(123); nsample <- 200
+set.seed(123); nsample <- 10000
 tmp.cust14 <- sample(cust14,nsample)
 # elicit corresponding transaction nbs based on above customer nb
 tmp.train <- trans[which(trans$customer_id %in% tmp.cust14),c('customer_id','order_no','order_date','product_id')]
@@ -113,7 +113,7 @@ for (i in 1:length(temp)) {load(paste("features/features.matrix.cust.vars/",temp
 # Reformating purchaseData as dataframe and get the final form of targetData
 # Load product table
 feat.item.global <- read.csv('features/features.item.global.csv')
-# names(feat.item.global)
+names(feat.item.global)
 item.features = colnames(feat.item.global)[c(1:7,143:ncol(feat.item.global))]
 
 purchaseData <- data.frame(purchaseData)
@@ -248,7 +248,7 @@ year2015 <- subset(targetFinalData, is2015)
 
 ## Now randomly select some 2015 data for model training and add it
 ## back into the existing training data
-set.seed(568)
+set.seed(123)
 inTrain <- createDataPartition(year2015$target, p = 1/2)[[1]]
 training2 <- year2015[ inTrain,]
 testing   <- year2015[-inTrain,]
@@ -268,69 +268,70 @@ dir.create('images')
 dir.create('models')
 
 #####################################################################################
-### See effect in AUC from data splitting strategy using SVM
-fullSet <- names(training)[!(names(training) %in% c("target","order_no","customer_id","product_id"))]
-
-pre2015Data <- training[pre2015,]
-year2015Data <- rbind(training[-pre2015,], testing)
-
-set.seed(552)
-test2015 <- createDataPartition(year2015Data$target, p = .5)[[1]]
-
-allData <- rbind(pre2015Data, year2015Data[-test2015,])
-holdout2015 <- year2015Data[test2015,]
-
-## Use a common tuning grid for both approaches. 
-svmrGrid <- expand.grid(sigma = c(.00007, .00009, .0001, .0002),
-                        C = 2^(-3:8))
-
-## Evaluate the model using overall 10-fold cross-validation
-ctrl0 <- trainControl(method = "cv",
-                      summaryFunction = twoClassSummary,
-                      classProbs = TRUE)
-set.seed(477)
-svmFit0 <- train(pre2015Data[,fullSet], pre2015Data$target,
-                 method = "svmRadial",
-                 tuneGrid = svmrGrid,
-                 preProc = c("center", "scale"),
-                 metric = "ROC",
-                 trControl = ctrl0)
-svmFit0
-
-### Now fit the single 2008 test set
-ctrl00 <- trainControl(method = "LGOCV",
-                       summaryFunction = twoClassSummary,
-                       classProbs = TRUE,
-                       index = list(TestSet = 1:nrow(pre2015Data)))
-
-set.seed(476)
-svmFit00 <- train(allData[,fullSet], allData$target,
-                  method = "svmRadial",
-                  tuneGrid = svmrGrid,
-                  preProc = c("center", "scale"),
-                  metric = "ROC",
-                  trControl = ctrl00)
-svmFit00
-
-## Combine the two sets of results and plot
-
-grid0 <- subset(svmFit0$results,  sigma == svmFit0$bestTune$sigma)
-grid0$Model <- "10-Fold Cross-Validation"
-
-grid00 <- subset(svmFit00$results,  sigma == svmFit00$bestTune$sigma)
-grid00$Model <- "Single 2008 Test Set"
-
-plotData <- rbind(grid00, grid0)
-
-plotData <- plotData[!is.na(plotData$ROC),]
-write.table(dTrain, paste('results/plotData_datasplittingSVM',nsample,'.seed',476,'.csv',sep=''), col.names = T, sep = ',')
-png(filename=paste('imagess/datasplitSVM',nsample,'.seed',476,'.png',sep=''))
-xyplot(ROC ~ C, data = plotData,
-       groups = Model,
-       type = c("g", "o"),
-       scales = list(x = list(log = 2)),
-       auto.key = list(columns = 1))
-dev.off()
+# ### See effect in AUC from data splitting strategy using SVM
+# fullSet <- names(training)[!(names(training) %in% c("target","order_no","customer_id","product_id"))]
+# 
+# pre2015Data <- training[pre2015,]
+# year2015Data <- rbind(training[-pre2015,], testing)
+# 
+# set.seed(123)
+# test2015 <- createDataPartition(year2015Data$target, p = .5)[[1]]
+# 
+# allData <- rbind(pre2015Data, year2015Data[-test2015,])
+# 
+# holdout2015 <- year2015Data[test2015,]
+# 
+# ## Use a common tuning grid for both approaches. 
+# svmrGrid <- expand.grid(sigma = c(.00007, .00009, .0001, .0002),
+#                         C = 2^(-3:8))
+# 
+# ## Evaluate the model using overall 10-fold cross-validation
+# ctrl0 <- trainControl(method = "cv",
+#                       summaryFunction = twoClassSummary,
+#                       classProbs = TRUE)
+# set.seed(123)
+# svmFit0 <- train(pre2015Data[,fullSet], pre2015Data$target,
+#                  method = "svmRadial",
+#                  tuneGrid = svmrGrid,
+#                  preProc = c("center", "scale"),
+#                  metric = "ROC",
+#                  trControl = ctrl0)
+# svmFit0
+# 
+# ### Now fit the single 2008 test set
+# ctrl00 <- trainControl(method = "LGOCV",
+#                        summaryFunction = twoClassSummary,
+#                        classProbs = TRUE,
+#                        index = list(TestSet = 1:nrow(pre2015Data)))
+# 
+# set.seed(123)
+# svmFit00 <- train(allData[,fullSet], allData$target,
+#                   method = "svmRadial",
+#                   tuneGrid = svmrGrid,
+#                   preProc = c("center", "scale"),
+#                   metric = "ROC",
+#                   trControl = ctrl00)
+# svmFit00
+# 
+# ## Combine the two sets of results and plot
+# 
+# grid0 <- subset(svmFit0$results,  sigma == svmFit0$bestTune$sigma)
+# grid0$Model <- "10-Fold Cross-Validation"
+# 
+# grid00 <- subset(svmFit00$results,  sigma == svmFit00$bestTune$sigma)
+# grid00$Model <- "Single 2008 Test Set"
+# 
+# plotData <- rbind(grid00, grid0)
+# 
+# plotData <- plotData[!is.na(plotData$ROC),]
+# write.table(dTrain, paste('results/plotData_datasplittingSVM',nsample,'.seed',123,'.csv',sep=''), col.names = T, sep = ',')
+# png(filename=paste('images/datasplitSVM',nsample,'.seed',123,'.png',sep=''))
+# xyplot(ROC ~ C, data = plotData,
+#        groups = Model,
+#        type = c("g", "o"),
+#        scales = list(x = list(log = 2)),
+#        auto.key = list(columns = 1))
+# dev.off()
 
 #####################################################################################
 ### Preprocessing before feeding the data into machine learning algorithms
@@ -358,12 +359,14 @@ xgb_trcontrol = trainControl(
   allowParallel = TRUE
 )
 
-set.seed(568)
-xgbTree_caret <- train(x = training[,fullSet],
+strt<-Sys.time() # start time
+
+set.seed(123)
+xgbTree <- train(x = training[,fullSet],
                        y = training$target,
                        method = "xgbTree",
                        metric = "ROC",
-                       tuneGrid = expand.grid(nrounds = 10*(30:50), #10*(15:50)
+                       tuneGrid = expand.grid(nrounds = 10*(15:50), #10*(15:50)
                                               eta = c(0.1, 0.2, 0.4, 0.6, 0.8, 1), #c(0.1, 0.2, 0.4, 0.6, 0.8, 1)
                                               max_depth = c(2, 4, 6, 8, 10), #c(0.05,0.1,0.5)
                                               gamma = 0,               #default=0
@@ -378,27 +381,42 @@ xgbTree_caret <- train(x = training[,fullSet],
                        nthread = 10
 )
 
-# Save Model
-saveRDS(xgbTree_caret, paste('model/xgbTree_caret.rds',nsample,'.seed',123,'.rds',sep=''))
+print(Sys.time()-strt) # end time
+print(xgbTree)
 
-# Get the result from 
-result.xgbTree_caret = xgbTree_caret$results
-# best result Spec
-result.xgbTree_caret[which(result.xgbTree_caret$Spec == max(result.xgbTree_caret$Spec)),c(1:9)]
+# save Model
+saveRDS(xgbTree, paste('models/xgbTree.rds',nsample,'.seed',123,'.rds',sep=''))
 
-# See in a glance the predictive power
-xgb.pred <- predict(xgbTree_caret,testing[,fullSet])
+# # get the result from 
+# result.xgbTree = xgbTree$results
+# # best result Spec
+# result.xgbTree[which(result.xgbTree$Spec == max(result.xgbTree$Spec)),c(1:9)]
+# 
+# # see in a glance the predictive power
+# xgb.pred <- predict(xgbTree,testing[,fullSet])
+# # look at the confusion matrix  
+# confusionMatrix(xgb.pred,testing$target)  
 
-#Look at the confusion matrix  
-confusionMatrix(xgb.pred,testing$target)  
+#### Store relevant graphics
+# grid tune search plot
+png(filename=paste('images/xgbTree_grid_tune.plot',nsample,'.seed',123,'.png',sep=''))
+plot(xgbTree)
+dev.off()
 
-plot(xgbTree_caret)
+## scatter plot of the AUC against max_depth and eta
+png(filename=paste('images/xgbTree_AUC_vs_maxdepth_eta.plot',nsample,'.seed',123,'.png',sep=''))
+ggplot(xgbTree$results, aes(x = as.factor(eta), y = max_depth, size = ROC, color = ROC)) + 
+  geom_point() + 
+  theme_bw() + 
+  scale_size_continuous(guide = "none")
+dev.off()
+
 
 ### Model : Neural Networks
 nnetGrid <- expand.grid(size = 1:10, decay = c(0, .1, 1, 2))
 maxSize <- max(nnetGrid$size)
-set.seed(568)
 
+set.seed(123)
 # model 1 : no transformation
 nnetFit <- train(x = training[,fullSet], 
                  y = training$target,
@@ -412,11 +430,10 @@ nnetFit <- train(x = training[,fullSet],
                  trControl = xgb_trcontrol)
 print(nnetFit)
 # Save Model
-saveRDS(nnetFit, paste('model/nnetFit.rds',nsample,'.seed',123,'.rds',sep=''))
-
+saveRDS(nnetFit, paste('models/nnetFit.rds',nsample,'.seed',123,'.rds',sep=''))
 
 # model 2 : spatial sign transformation
-set.seed(568)
+set.seed(123)
 nnetFit2 <- train(x =  training[,fullSet], 
                   y = training$target,
                   method = "nnet",
@@ -429,13 +446,13 @@ nnetFit2 <- train(x =  training[,fullSet],
                   trControl = xgb_trcontrol)
 print(nnetFit2)
 # Save Model
-saveRDS(nnetFit2, paste('model/nnetFit2.rds',nsample,'.seed',123,'.rds',sep=''))
+saveRDS(nnetFit2, paste('models/nnetFit2.rds',nsample,'.seed',123,'.rds',sep=''))
 
 
 # model 3 : repeat the model 10 times, and take the average results
 nnetGrid$bag <- FALSE
 
-set.seed(476)
+set.seed(123)
 nnetFit3 <- train(x = training[,fullSet], 
                   y = training$target,
                   method = "avNNet",
@@ -446,14 +463,16 @@ nnetFit3 <- train(x = training[,fullSet],
                   trace = FALSE,
                   maxit = 2000,
                   MaxNWts = 10*(maxSize * (length(fullSet) + 1) + maxSize + 1),
-                  allowParallel = FALSE, ## this will cause to many workers to be launched.
+                  #allowParallel = FALSE, ## this will cause to many workers to be launched.
                   trControl = xgb_trcontrol)
 print(nnetFit3)
 # Save Models
-saveRDS(nnetFit3, paste('model/nnetFit3.rds',nsample,'.seed',123,'.rds',sep=''))
+saveRDS(nnetFit3, paste('models/nnetFit3.rds',nsample,'.seed',123,'.rds',sep=''))
+
+strt<-Sys.time() # start time
 
 # model 4 : repeat the model 10 times, and take the average results plus tranformation
-set.seed(476)
+set.seed(123)
 nnetFit4 <- train(x = training[,fullSet], 
                   y = training$target,
                   method = "avNNet",
@@ -464,17 +483,19 @@ nnetFit4 <- train(x = training[,fullSet],
                   maxit = 2000,
                   repeats = 10,
                   MaxNWts = 10*(maxSize * (length(fullSet) + 1) + maxSize + 1),
-                  allowParallel = FALSE, 
+                  #allowParallel = FALSE, 
                   trControl = xgb_trcontrol)
 print(nnetFit4)
 # Save Models
-saveRDS(nnetFit4, paste('model/nnetFit4.rds',nsample,'.seed',123,'.rds',sep=''))
+saveRDS(nnetFit4, paste('models/nnetFit4.rds',nsample,'.seed',123,'.rds',sep=''))
 
-# Get the result from 
-result.nnetFit4 = nnetFit4$results
+print(Sys.time()-strt) # end time
 
-# best result AUC achieved
-result.nnetFit4[which(result.nnetFit4$ROC == max(result.nnetFit4$ROC)),c(1:8)]
+# # Get the result from 
+# result.nnetFit4 = nnetFit4$results
+# 
+# # best result AUC achieved
+# result.nnetFit4[which(result.nnetFit4$ROC == max(result.nnetFit4$ROC)),c(1:8)]
 
 nnetFit4$pred <- merge(nnetFit4$pred,  nnetFit4$bestTune)
 nnetCM <- confusionMatrix(nnetFit4, norm = "none")
@@ -501,7 +522,15 @@ nnet4$bag <- NULL
 nnetResults <- rbind(nnet1, nnet2, nnet3, nnet4)
 nnetResults$Model <- factor(as.character(nnetResults$Model),
                             levels = c("Single Model", "Model Averaging"))
+
+#### Store relevant graphics
+# grid tune search plot
+png(filename=paste('images/xgbTree_grid_tune.plot',nsample,'.seed',123,'.png',sep=''))
+plot(xgbTree)
+dev.off()
+
 library(latticeExtra)
+png(filename=paste('images/nnet4_AUC.plot',nsample,'.seed',123,'.png',sep=''))
 useOuterStrips(
   xyplot(ROC ~ size|Model*Transform,
          data = nnetResults,
@@ -514,25 +543,23 @@ useOuterStrips(
          auto.key = list(columns = 4, 
                          title = "Weight Decay", 
                          cex.title = 1)))
+dev.off()
 
-nnetRoc <- roc(response = nnetFit4$pred$obs,
-               predictor = nnetFit4$pred$Y,
-               levels = rev(levels(nnetFit4$pred$obs)))
-plot(nnetRoc, type = "s", legacy.axes = TRUE)
-
-
-# See in a glance the predictive power
-nnetFit4.pred <- predict(nnetFit4,testing[,fullSet])
-
-#Look at the confusion matrix  
-confusionMatrix(nnetFit4.pred,testing$target)  
+# # See in a glance the predictive power
+# nnetFit4.pred <- predict(nnetFit4,testing[,fullSet])
+# 
+# #Look at the confusion matrix  
+# confusionMatrix(nnetFit4.pred,testing$target)  
 
 #### Model : Penalized Regression Logistics
 # lasso, ridge and elastic net by configuring the alpha parameter to 1, 0 or in [0,1]
 glmnGrid <- expand.grid(alpha = c(0,  .1,  .2, .4, .6, .8, 1), #c(0,  .1,  .2, .4, .6, .8, 1)
                         lambda = seq(.01, .2, length = 50))
 
-set.seed(476)
+set.seed(123)
+
+strt<-Sys.time() # start time
+
 glmnFit <- train(x = training[,fullSet], 
                  y = training$target,
                  method = "glmnet",
@@ -540,32 +567,69 @@ glmnFit <- train(x = training[,fullSet],
                  preProc = c("center", "scale"),
                  metric = "ROC",
                  trControl = xgb_trcontrol)
+
+print(Sys.time()-strt) # end time
+
 # Get the result from glmnet
 print(glmnFit)
 # Save Models
-saveRDS(glmnFit, paste('model/glmnFit.rds',nsample,'.seed',123,'.rds',sep=''))
+saveRDS(glmnFit, paste('models/glmnFit.rds',nsample,'.seed',123,'.rds',sep=''))
 
-result.glmnFit <- glmnFit$result
+# result.glmnFit <- glmnFit$result
+# 
+# # best result AUC achieved
+# result.glmnFit[which(result.glmnFit$Spec == max(result.glmnFit$Spec)),c(1:8)]
+# plot(glmnFit)
+# 
+# # See in a glance the predictive power
+# glmnFit.pred <- predict(glmnFit,testing[,fullSet])
+# 
+# #Look at the confusion matrix  
+# confusionMatrix(glmnFit.pred,testing$target)  
 
-# best result AUC achieved
-result.glmnFit[which(result.glmnFit$Spec == max(result.glmnFit$Spec)),c(1:8)]
+
+# get Plot of AUC against alpha and lambda
+png(filename=paste('images/glmnFit_grid_tune.plot',nsample,'.seed',123,'.png',sep=''))
 plot(glmnFit)
+dev.off()
 
-# See in a glance the predictive power
-glmnFit.pred <- predict(glmnFit,testing[,fullSet])
+# get Plot of AUC against alpha and lambda (bubble chart)
+png(filename=paste('images/glmnFit_AUC_vs_alpha_lambda.plot',nsample,'.seed',123,'.png',sep=''))
+ggplot(glmnFit$results, aes(x = as.factor(alpha), y = lambda, size = ROC, color = ROC)) + 
+  geom_point() + 
+  theme_bw() + 
+  scale_size_continuous(guide = "none")
+dev.off
 
-#Look at the confusion matrix  
-confusionMatrix(glmnFit.pred,testing$target)  
+glmnFit0 <- glmnFit
+glmnFit0$results$lambda <- format(round(glmnFit0$results$lambda, 3))
+
+glmnPlot <- plot(glmnFit0,
+                 plotType = "level",
+                 cuts = 15,
+                 scales = list(x = list(rot = 90, cex = .65)))
+
+# get Plot of AUC distribution alongside different alpha settings
+png(filename=paste('images/glmnplot_AUC_Ridge_Lasso.plot',nsample,'.seed',123,'.png',sep=''))
+update(glmnPlot,
+       ylab = "Mixing Percentage\nRidge <---------> Lasso",
+       sub = "",
+       main = "Area Under the ROC Curve",
+       xlab = "Amount of Regularization")
+dev.off()
 
 ### Model : Support Vector Machines
 library(kernlab)
 
 # Running SVM Radial Kernel
-set.seed(201)
+set.seed(123)
 sigmaRangeFull <- sigest(data.matrix(training[,fullSet]))
 svmRGridFull <- expand.grid(sigma =  as.vector(sigmaRangeFull)[1],
                             C = 2^(-3:4))
-set.seed(476)
+set.seed(123)
+
+strt<-Sys.time() # start time
+
 svmRFitFull <- train(x = training[,fullSet], 
                      y = training$target,
                      method = "svmRadial",
@@ -573,26 +637,46 @@ svmRFitFull <- train(x = training[,fullSet],
                      preProc = c("center", "scale"),
                      tuneGrid = svmRGridFull,
                      trControl = xgb_trcontrol)
+
+print(Sys.time()-strt) # end time
+
 print(svmRFitFull)
 # Save Models
-saveRDS(svmRFitFull, paste('model/svmRFitFull.rds',nsample,'.seed',123,'.rds',sep=''))
+saveRDS(svmRFitFull, paste('models/svmRFitFull.rds',nsample,'.seed',123,'.rds',sep=''))
 
-result.svmRFitFull<- svmRFitFull$result
-# best result AUC achieved
-result.svmRFitFull[which(result.svmRFitFull$Spec == max(result.svmRFitFull$Spec)),c(1:8)]
+# result.svmRFitFull<- svmRFitFull$result
+# # best result AUC achieved
+# result.svmRFitFull[which(result.svmRFitFull$Spec == max(result.svmRFitFull$Spec)),c(1:8)]
+# plot(svmRFitFull)
+# 
+# # See in a glance the predictive power
+# svmRFitFull.pred <- predict(svmRFitFull,testing[,fullSet])
+# 
+# #Look at the confusion matrix  
+# confusionMatrix(svmRFitFull.pred,testing$target)  
+
+## Store images - SVM radial kernel basis
+# get plot of AUC against alpha and lambda
+png(filename=paste('images/svmRFitFull_grid_tune.plot',nsample,'.seed',123,'.png',sep=''))
 plot(svmRFitFull)
+dev.off()
 
-# See in a glance the predictive power
-svmRFitFull.pred <- predict(svmRFitFull,testing[,fullSet])
-
-#Look at the confusion matrix  
-confusionMatrix(svmRFitFull.pred,testing$target)  
+# get plot of AUC against sigma
+png(filename=paste('images/svmRFitFull_AUC_vs_sigma.plot',nsample,'.seed',123,'.png',sep=''))
+ggplot(svmRFitFull$results, aes(x = as.factor(sigma), y = C , size = ROC, color = ROC)) + 
+  geom_point() + 
+  theme_bw() + 
+  scale_size_continuous(guide = "none")
+dev.off()
 
 #SVM Polynomial Kernel
 svmPGrid <-  expand.grid(degree = 1:2,
                          scale = c(0.01, .005),
                          C = 2^(seq(-6, -2, length = 10)))
-set.seed(476)
+set.seed(123)
+
+strt<-Sys.time() # start time
+
 svmPFitFull <- train(x = training[,fullSet], 
                      y = training$target,
                      method = "svmPoly",
@@ -601,60 +685,85 @@ svmPFitFull <- train(x = training[,fullSet],
                      tuneGrid = svmPGrid,
                      trControl = xgb_trcontrol)
 
+print(Sys.time()-strt) # end time
+
 print(svmPFitFull)
 # Save Models
-saveRDS(svmPFitFull, paste('model/svmPFitFull.rds',nsample,'.seed',123,'.rds',sep=''))
+saveRDS(svmPFitFull, paste('models/svmPFitFull.rds',nsample,'.seed',123,'.rds',sep=''))
 
-result.svmPFitFull<- svmPFitFull$result
-# best result AUC achieved
-result.svmPFitFull[which(result.svmPFitFull$Spec == max(result.svmPFitFull$Spec)),c(1:8)]
-plot(result.svmPFitFull)
+# result.svmPFitFull<- svmPFitFull$result
+# # best result AUC achieved
+# result.svmPFitFull[which(result.svmPFitFull$Spec == max(result.svmPFitFull$Spec)),c(1:8)]
+# plot(result.svmPFitFull)
+# 
+# # See in a glance the predictive power
+# svmPFitFull.pred <- predict(svmPFitFull,testing[,fullSet])
+# 
+# #Look at the confusion matrix  
+# confusionMatrix(svmPFitFull.pred,testing$target)  
 
-# See in a glance the predictive power
-svmPFitFull.pred <- predict(svmPFitFull,testing[,fullSet])
+## Store images - SVM radial kernel basis
+# get plot of AUC against alpha and lambda
+png(filename=paste('images/svmPFitFull_grid_tune.plot',nsample,'.seed',123,'.png',sep=''))
+plot(svmPFitFull)
+dev.off()
 
-#Look at the confusion matrix  
-confusionMatrix(svmPFitFull.pred,testing$target)  
+# get plot of AUC against sigma
+png(filename=paste('images/svmPFitFull_AUC_vs_sigma.plot',nsample,'.seed',123,'.png',sep=''))
+ggplot(svmPFitFull$results, aes(x = as.factor(degree), y = C , size = ROC, color = ROC)) + 
+  geom_point() + 
+  theme_bw() + 
+  scale_size_continuous(guide = "none")
+dev.off()
 
 #####################################################################################
-### Create Prediction
+### Create Prediction for Testing Set
+validation <- data.frame(order_no = testing$order_no , order_date = testing$order_date, product_id = testing$product_id, obs = testing$target)
+validation$label <- ifelse(val.xgbTree$obs == 1,
+                            "Actual_outcome:Purchase", 
+                            "Actual_outcome:Not_Purchase")
 
-predRes.xgbTree <- data.frame(order_no = testing$order_no ,obs = testing$target)
-predRes.xgbTree$prob <- predict(xgbTree_caret, testing[,fullSet],type='prob')[,'Y']
-predRes.xgbTree$pred <- predict(xgbTree_caret, testing[,fullSet])
+# Model : Extreme Gradient Boosting
+validation$prob.xgbTree <- predict(xgbTree, testing[,fullSet],type='prob')[,'Y']
+validation$pred.xgbTree <- predict(xgbTree, testing[,fullSet])
+
+# Model : Neural Network (model1)
+validation$prob.nnetFit <- predict(nnetFit, testing[,fullSet],type='prob')[,'Y']
+validation$pred.nnetFit <- predict(nnetFit, testing[,fullSet])
+
+# Model : Neural Network (model2)
+validation$prob.nnetFit2 <- predict(nnetFit2, testing[,fullSet],type='prob')[,'Y']
+validation$pred.nnetFit2 <- predict(nnetFit2, testing[,fullSet])
+
+# Model : Neural Network (model3)
+validation$prob.nnetFit3 <- predict(nnetFit3, testing[,fullSet],type='prob')[,'Y']
+validation$pred.nnetFit3 <- predict(nnetFit3, testing[,fullSet])
+
+# Model : Neural Network (model4)
+validation$prob.nnetFit4 <- predict(nnetFit4, testing[,fullSet],type='prob')[,'Y']
+validation$pred.nnetFit4 <- predict(nnetFit4, testing[,fullSet])
+
+# Model : Penalized Logistic Regression 
+validation$prob.glmnFit<- predict(glmnFit, testing[,fullSet],type='prob')[,'Y']
+validation$pred.glmnFit <- predict(glmnFit, testing[,fullSet])
+
+# Model : Support Vector Machine - Radial Kernel Basis
+validation$prob.svmRFitFull <- predict(svmRFitFull, testing[,fullSet],type='prob')[,'Y']
+validation$pred.svmRFitFull <- predict(svmRFitFull, testing[,fullSet])
+s
+# Model : Support Vector Machine - Polynomial Kernel Basis
+validation$prob.svmPFitFull <- predict(svmPFitFull, testing[,fullSet],type='prob')[,'Y']
+validation$pred.svmPFitFull <- predict(svmPFitFull, testing[,fullSet])
 
 # Reformating data for interpreting the resutls
-predRes.xgbTree$obs = factor(predRes.xgbTree$obs,labels=c(0,1))
-predRes.xgbTree$pred = factor(predRes.xgbTree$pred,labels=c(0,1))
+validation$obs = factor(validation$obs,labels=c(0,1))
+validation$pred.xgbTree = factor(validation$pred.xgbTree,labels=c(0,1))
+validation$pred.nnetFit = factor(validation$pred.nnetFit,labels=c(0,1))
+validation$pred.nnetFit2 = factor(validation$pred.nnetFit2,labels=c(0,1))
+validation$pred.nnetFit3 = factor(validation$pred.nnetFit3,labels=c(0,1))
+validation$pred.nnetFit4 = factor(validation$pred.nnetFit4,labels=c(0,1))
+validation$pred.glmnFit = factor(validation$pred.glmnFit,labels=c(0,1))
+validation$pred.svmRFitFull = factor(validation$pred.svmRFitFull,labels=c(0,1))
+validation$pred.svmPFitFull = factor(validation$pred.svmPFitFull,labels=c(0,1))
 
-predRes.xgbTree$label <- ifelse(predRes.xgbTree$obs == 1,
-                                      "True Outcome: Purchase", 
-                                      "True Outcome: Did Not Purchase")
-
-### Plot the probability of bad credit
-histogram(~prob|label,
-          data = predRes.xgbTree,
-          layout = c(2, 1),
-          nint = 20,
-          xlab = "Probability of Purchase",
-          type = "count")
-
-### Create the confusion matrix from the test set.
-confusionMatrix(data = predRes.xgbTree$pred, 
-                reference = predRes.xgbTree$obs)
-### Plot the probability of bad credit
-histogram(~prob|label,
-          data = predRes.xgbTree,
-          layout = c(2, 1),
-          nint = 20,
-          xlab = "Probability of Purchase",
-          type = "count")
-
-### ROC curves:
-library(pROC)
-purchaseROC <- roc(relevel(predRes.xgbTree$obs, "1"), predRes.xgbTree$prob)
-coords(purchaseROC, "all")[,1:3]
-
-### Compute ROC and its 95 Confidential Level
-auc(purchaseROC)
-ci.auc(purchaseROC)
+write.table(validation, paste('results/validation_allModels',nsample,'.seed',123,'.csv',sep=''), col.names = T, sep = ',')

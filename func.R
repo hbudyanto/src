@@ -75,6 +75,10 @@ getUserItemBasedScore <- function (data, matrix_similarity)
   return(results)
 }
 
+# checker vector is empty or not
+vector.is.empty <- function(x) return(length(x) ==0 )
+
+# get Affinity score
 getAffinityScore <- function(holder,test) {
   affinity_scores <- vector(mode="numeric", length=nrow(test))
   user <- rownames(holder)
