@@ -61,10 +61,7 @@ getUserItemBasedScore <- function (data, matrix_similarity)
       topN.similarities <- as.numeric(topN[,1])
       
       # We then get the user's purchase history for those 10 items
-      # topN.purchases<- data[,c("customer_id",topN.names)]
-      # topN.userPurchases<-topN.purchases[topN.purchases$customer_id==user,]
-      topN.userPurchases <-  data[which(data$customer_id == user),topN.names]
-      topN.userPurchases <- as.numeric(topN.userPurchases[!(names(topN.userPurchases) %in% c("customer_id"))])
+      topN.userPurchases <-  as.numeric(data[which(data$customer_id == user),topN.names])
       
       # We then calculate the score for that product and that user
       sum(topN.similarities*topN.userPurchases) / sum(topN.similarities)

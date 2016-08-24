@@ -1,16 +1,21 @@
 ### R code for Feature Construction on Items-based collaborative filteringrequire(data.table)
+### Author : Adi Budyanto
+### Date : 20 August 2016
+
 require(plyr)
 require(data.table)
 require(doParallel)
 
-# load pre-defined functions
-source('~/PycharmProjects/dissertation/src/v2/func.R')
+# # load pre-defined functions
+# source('~/PycharmProjects/dissertation/src/v2/func.R')
 
 # set working path in Desktop
 if (Sys.info()[1] == 'Darwin') {
   setwd("~/PycharmProjects/dissertation/raw_data")  
+  source('~/PycharmProjects/dissertation/src/v2/func.R')
 } else {
   setwd("~/Dropbox/dissertation/raw_data")
+  source('~/Dropbox/dissertation/src/func.R')
 }
 
 ######################################################################

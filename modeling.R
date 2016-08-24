@@ -8,14 +8,16 @@ library(lubridate)
 require(doParallel)
 require(caret)
 
-# load pre-defined functions
-source('~/PycharmProjects/dissertation/src/v2/func.R')
+# # load pre-defined functions
+# source('~/PycharmProjects/dissertation/src/v2/func.R')
 
 # set working path in Desktop
 if (Sys.info()[1] == 'Darwin') {
   setwd("~/PycharmProjects/dissertation/raw_data")  
+  source('~/PycharmProjects/dissertation/src/v2/func.R')
 } else {
   setwd("~/Dropbox/dissertation/raw_data")
+  source('~/Dropbox/dissertation/src/func.R')
 }
 
 ######################################################################
@@ -44,8 +46,15 @@ trans$discount_percent[is.na(trans$discount_percent)] <- 0
 #### Random select smaller set of 2014 customers for faster simulation (temp)
 # filter customer in the year of 2014 
 cust14 <- unique(trans[which(year(trans$order_date) == 2014),c("customer_id")])
-set.seed(123); nsample <- 10000
-tmp.cust14 <- sample(cust14,nsample)
+# load cust14 who bought newproduct in 2015 (for testing class balanceness)
+# otherwise, we may find a lot of samples for new items with small 'Y'
+load('features/features.cust.item.random/custid.boughtnew15.rda')
+cust14.newprod15 <- unique(trans[which(year(trans$order_date) == 2014 & trans$customer_id %in% custid.boughtnew15),c("customer_id")])
+set.seed(123); 
+nsample <- 1000; tmp.cust14 <- sample(cust14,nsample)
+nsample1 <- 500; tmp.cust14.new15 <- sample(cust14.newprod15,nsample1)
+# random select and update the number of samples choosen
+tmp.cust14 <- union(tmp.cust14,tmp.cust14.new15); nsample <- nsample+nsample1
 # elicit corresponding transaction nbs based on above customer nb
 tmp.train <- trans[which(trans$customer_id %in% tmp.cust14),c('customer_id','order_no','order_date','product_id')]
 # new variable to determine the year of the transaction 
@@ -65,22 +74,30 @@ data1 <- data.table(tmp.train)
 data1 <- data1[,c('key', 'product_id'), with=F]
 data1$target <- rep(1,nrow(data1))
 
+# load a list of product 15
+load('features/features.cust.item.random/newprod15.rda')
+amanNew <- sample(prodnew2015,10)
+
+# check number of samples with new items taken (2222 records)
+#x <- data1[which(data1$product_id %in% prodnew2015),]
+
 # negative samples / class = 0
 # firstly, create target product_id for random sampling
 aman <- ddply(data1, .(product_id), function(x) c(numOrder = nrow(x)))
 aman <- aman[with(aman, order(-numOrder)), ]
-aman <- aman[1:10,1]
+amanTop <- aman[1:25,1]
+amanSample <- c(amanNew,amanTop)
 
 # create unique list of key identifier (cust_id + order_no)
 purchases = unique(data1$key)
 seeds <- sample(1:(10*length(purchases)), length(purchases))
 items <- list()
 
-# set k = 3 items to randomly sampled as negative target
-k = 3
+# set k = 6 items to randomly sampled as negative target (6=20:80)
+k = 5
 for (i in 1:length(purchases)){ # k random items for each week purchaser
   set.seed(seeds[i])                    
-  items[[i]] <- sample(aman, k)
+  items[[i]] <- sample(amanSample, k)
 }
 
 # remove purchased items from aforementioned list
@@ -91,15 +108,23 @@ reps <- unlist(lapply(1:length(items), function(i){length(items[[i]])}))
 data0 <- data.frame(cbind('key' = rep(purchases, reps), 'product_id'=unlist(items)))
 data0$target <- rep(0,nrow(data0))
 
+# length(data0[which(data0$product_id %in% prodnew2015),c("product_id")]) #15635 or 28% dummy is new product (3000 old sampling)
+# length(data0[which(data0$product_id %in% prodnew2015),c("product_id")]) #38306 or 28% dummy is new product (4000 new sampling)
+
 ######################################################################
 #### Binding data1 and data0 together and get back the unique identifiers
 data <- rbind(data1,data0)
 data <- data[with(data, order(key)),]
 colnames(tmp.train)[-4]
 
-# Link back to key data to get unique identifiers
-purchaseData <- merge(data,tmp.train[,-4], by=c("key"))
+# temporary check : some error appears after incorporating sampling from new products
+tmpUnData <- data[!(duplicated(data))]
+tmpUnTrain <- unique(tmp.train[,colnames(tmp.train)[-4]])
+purchaseData <- merge(tmpUnData,tmpUnTrain, by=c("key"))
 
+# Link back to key data to get unique identifiers
+# purchaseData <- merge(data,tmp.train[,-4], by=c("key"))
+save(purchaseData, file = paste('features/features.cust.item.random/purchaseData',nsample,'.seed',123,'.rda',sep=''))
 #####################################################################################
 ##### Load relevant data (purchase dummy data - matrix similarity) generated from similariy.R
 
@@ -125,6 +150,7 @@ id <- unique(targetData$customer_id)
 ### Constructing features from three sources : Item profiles, Customer, and ItembasedCF
 
 # Get relevant itembasedCF per customer basis
+strt<-Sys.time() # start time
 # 1 Product ID (p1,p2,p3)
 tmp.data <- useritemList[[14]]
 tmp.matrix <- CFlist[[14]]
@@ -233,11 +259,15 @@ tmp.matrix <- CFlist[[2]]
 tmp.holder <- getUserItemBasedScore(data = tmp.data[tmp.data$customer_id %in% id,], matrix_similarity =tmp.matrix)
 targetData$scoreBrandManu <- getAffinityScore(holder= tmp.holder, test = targetData[,c("customer_id","brand.manu")])
 
+print(Sys.time()-strt) # end time
+
 tmp <- names(targetData)[6:24]
 targetFinalData <- targetData[, !(colnames(targetData) %in% tmp)]
 
 # save original files before data splitting
 save(purchaseData, targetFinalData, targetData, file = paste('features/features.cust.item.random/purchaseData',nsample,'.seed',123,'.rda',sep=''))
+# nsample = 5000;
+# load(paste('features/features.cust.item.random/purchaseData',nsample,'.seed',123,'.rda',sep=''))
 
 #####################################################################################
 ### We'll split all of the 2014 data into the training set and a portion of the 2015 data too
@@ -249,12 +279,13 @@ year2015 <- subset(targetFinalData, is2015)
 ## Now randomly select some 2015 data for model training and add it
 ## back into the existing training data
 set.seed(123)
+# create partition data relying on two categorical variables
+# note : sometime, this can create unsignificant balance portion on training & set data
+# from 7 under same custid, 6 obs can go onto train set, while only 1 goes to test set
 inTrain <- createDataPartition(year2015$target, p = 1/2)[[1]]
 training2 <- year2015[ inTrain,]
 testing   <- year2015[-inTrain,]
 training <- rbind(training, training2)
-
-training$is2015 <- testing$is2015 <- NULL
 
 training <- noZV(training)
 testing <- testing[, names(training)]
@@ -266,6 +297,10 @@ save(training, pre2015, testing, file = paste('features/features.cust.item.rando
 dir.create('results')
 dir.create('images')
 dir.create('models')
+
+# Load files for preModelData
+# nsample = 200
+# load(paste('features/features.cust.item.random/preModelData',nsample,'.seed',123,'.rda',sep=''))
 
 #####################################################################################
 # ### See effect in AUC from data splitting strategy using SVM
@@ -359,9 +394,8 @@ xgb_trcontrol = trainControl(
   allowParallel = TRUE
 )
 
-strt<-Sys.time() # start time
-
 set.seed(123)
+strt<-Sys.time() # start time
 xgbTree <- train(x = training[,fullSet],
                        y = training$target,
                        method = "xgbTree",
@@ -382,7 +416,7 @@ xgbTree <- train(x = training[,fullSet],
 )
 
 print(Sys.time()-strt) # end time
-print(xgbTree)
+# print(xgbTree)
 
 # save Model
 saveRDS(xgbTree, paste('models/xgbTree.rds',nsample,'.seed',123,'.rds',sep=''))
@@ -417,6 +451,7 @@ nnetGrid <- expand.grid(size = 1:10, decay = c(0, .1, 1, 2))
 maxSize <- max(nnetGrid$size)
 
 set.seed(123)
+strt<-Sys.time() # start time
 # model 1 : no transformation
 nnetFit <- train(x = training[,fullSet], 
                  y = training$target,
@@ -428,12 +463,14 @@ nnetFit <- train(x = training[,fullSet],
                  maxit = 2000,
                  MaxNWts = 1*(maxSize * (length(fullSet) + 1) + maxSize + 1),
                  trControl = xgb_trcontrol)
-print(nnetFit)
+print(Sys.time()-strt) # end time
+# print(nnetFit)
 # Save Model
 saveRDS(nnetFit, paste('models/nnetFit.rds',nsample,'.seed',123,'.rds',sep=''))
 
 # model 2 : spatial sign transformation
 set.seed(123)
+strt<-Sys.time() # start time
 nnetFit2 <- train(x =  training[,fullSet], 
                   y = training$target,
                   method = "nnet",
@@ -444,7 +481,8 @@ nnetFit2 <- train(x =  training[,fullSet],
                   maxit = 2000,
                   MaxNWts = 1*(maxSize * (length(fullSet) + 1) + maxSize + 1),
                   trControl = xgb_trcontrol)
-print(nnetFit2)
+print(Sys.time()-strt) # end time
+# print(nnetFit2)
 # Save Model
 saveRDS(nnetFit2, paste('models/nnetFit2.rds',nsample,'.seed',123,'.rds',sep=''))
 
@@ -453,6 +491,7 @@ saveRDS(nnetFit2, paste('models/nnetFit2.rds',nsample,'.seed',123,'.rds',sep='')
 nnetGrid$bag <- FALSE
 
 set.seed(123)
+strt<-Sys.time() # start time
 nnetFit3 <- train(x = training[,fullSet], 
                   y = training$target,
                   method = "avNNet",
@@ -465,14 +504,15 @@ nnetFit3 <- train(x = training[,fullSet],
                   MaxNWts = 10*(maxSize * (length(fullSet) + 1) + maxSize + 1),
                   #allowParallel = FALSE, ## this will cause to many workers to be launched.
                   trControl = xgb_trcontrol)
-print(nnetFit3)
+print(Sys.time()-strt) # end time
+# print(nnetFit3)
 # Save Models
 saveRDS(nnetFit3, paste('models/nnetFit3.rds',nsample,'.seed',123,'.rds',sep=''))
 
-strt<-Sys.time() # start time
 
 # model 4 : repeat the model 10 times, and take the average results plus tranformation
 set.seed(123)
+strt<-Sys.time() # start time
 nnetFit4 <- train(x = training[,fullSet], 
                   y = training$target,
                   method = "avNNet",
@@ -485,11 +525,10 @@ nnetFit4 <- train(x = training[,fullSet],
                   MaxNWts = 10*(maxSize * (length(fullSet) + 1) + maxSize + 1),
                   #allowParallel = FALSE, 
                   trControl = xgb_trcontrol)
-print(nnetFit4)
+print(Sys.time()-strt) # end time
+# print(nnetFit4)
 # Save Models
 saveRDS(nnetFit4, paste('models/nnetFit4.rds',nsample,'.seed',123,'.rds',sep=''))
-
-print(Sys.time()-strt) # end time
 
 # # Get the result from 
 # result.nnetFit4 = nnetFit4$results
@@ -557,9 +596,7 @@ glmnGrid <- expand.grid(alpha = c(0,  .1,  .2, .4, .6, .8, 1), #c(0,  .1,  .2, .
                         lambda = seq(.01, .2, length = 50))
 
 set.seed(123)
-
 strt<-Sys.time() # start time
-
 glmnFit <- train(x = training[,fullSet], 
                  y = training$target,
                  method = "glmnet",
@@ -567,11 +604,10 @@ glmnFit <- train(x = training[,fullSet],
                  preProc = c("center", "scale"),
                  metric = "ROC",
                  trControl = xgb_trcontrol)
-
 print(Sys.time()-strt) # end time
 
 # Get the result from glmnet
-print(glmnFit)
+# print(glmnFit)
 # Save Models
 saveRDS(glmnFit, paste('models/glmnFit.rds',nsample,'.seed',123,'.rds',sep=''))
 
@@ -627,9 +663,7 @@ sigmaRangeFull <- sigest(data.matrix(training[,fullSet]))
 svmRGridFull <- expand.grid(sigma =  as.vector(sigmaRangeFull)[1],
                             C = 2^(-3:4))
 set.seed(123)
-
 strt<-Sys.time() # start time
-
 svmRFitFull <- train(x = training[,fullSet], 
                      y = training$target,
                      method = "svmRadial",
@@ -637,10 +671,9 @@ svmRFitFull <- train(x = training[,fullSet],
                      preProc = c("center", "scale"),
                      tuneGrid = svmRGridFull,
                      trControl = xgb_trcontrol)
-
 print(Sys.time()-strt) # end time
 
-print(svmRFitFull)
+# print(svmRFitFull)
 # Save Models
 saveRDS(svmRFitFull, paste('models/svmRFitFull.rds',nsample,'.seed',123,'.rds',sep=''))
 
@@ -674,9 +707,7 @@ svmPGrid <-  expand.grid(degree = 1:2,
                          scale = c(0.01, .005),
                          C = 2^(seq(-6, -2, length = 10)))
 set.seed(123)
-
 strt<-Sys.time() # start time
-
 svmPFitFull <- train(x = training[,fullSet], 
                      y = training$target,
                      method = "svmPoly",
@@ -684,10 +715,9 @@ svmPFitFull <- train(x = training[,fullSet],
                      preProc = c("center", "scale"),
                      tuneGrid = svmPGrid,
                      trControl = xgb_trcontrol)
-
 print(Sys.time()-strt) # end time
 
-print(svmPFitFull)
+# print(svmPFitFull)
 # Save Models
 saveRDS(svmPFitFull, paste('models/svmPFitFull.rds',nsample,'.seed',123,'.rds',sep=''))
 
@@ -717,9 +747,75 @@ ggplot(svmPFitFull$results, aes(x = as.factor(degree), y = C , size = ROC, color
 dev.off()
 
 #####################################################################################
+### Run baseline models for comparison
+require(recommenderlab)
+# create dataframe consisting customer and product relationship table
+tmpTrain <- dummyProductID(data = training)
+tmpTest <- dummyProductID(data = testing)
+
+# manipulate Train table to have exact number of product as test table
+prodMissingTrain <- setdiff(colnames(tmpTest),colnames(tmpTrain))
+tmpMissing <- matrix(0, nrow=nrow(tmpTrain), ncol=length(prodMissingTrain))
+colnames(tmpMissing) <- prodMissingTrain
+tmpTrain <- cbind(tmpTrain, tmpMissing)
+
+# manipulate test table to have exact number of product as train table
+prodMissingTest <- setdiff(colnames(tmpTrain),colnames(tmpTest))
+tmpMissing <- matrix(0, nrow=nrow(tmpTest), ncol=length(prodMissingTest))
+colnames(tmpMissing) <- prodMissingTest
+tmpTest <- cbind(tmpTest, tmpMissing)
+
+# keep customers who do not have any record transaction in Testset ONLY (see note in problems with createDatapartition in above)
+tmpUserMissing <- setdiff(unique(testing$customer_id), tmpTest$customer_id)
+tmpMissing <- matrix(0, nrow=length(tmpUserMissing), ncol=ncol(tmpTest)-1)
+tmp <- data.frame('customer_id' = tmpUserMissing, tmpMissing)
+colnames(tmp)[-1] <- colnames(tmpTest)[-1]
+tmpTest <- rbind(tmpTest, tmp)
+
+# re-sorting table in the same format for both train and test
+sortCol <-sort(intersect(colnames(tmpTest), colnames(tmpTrain)))
+tmpTrain <- tmpTrain[,sortCol]
+tmpTest <- tmpTest[,sortCol]
+
+# formating the above dataframe into a matrix 
+# training data
+holderTrain  <- data.matrix(tmpTrain[2:ncol(tmpTrain)]) 
+rownames(holderTrain) <- tmpTrain$customer_id
+# testing data
+holderTest  <- data.matrix(tmpTest[2:ncol(tmpTest)]) 
+rownames(holderTest) <- tmpTest$customer_id
+
+# converted to realRatingmatrix Object
+realMatrixTrain <- binarize(as(holderTrain, "realRatingMatrix"), minRating = 1)
+realMatrixTest <- binarize(as(holderTest, "realRatingMatrix"), minRating = 1)
+
+### Creating recommender on baseline
+# 1.Popular Items
+pred.popular <- Recommender(realMatrixTrain, method = "POPULAR"); #names(getModel(pred.popular))
+# make prediction
+recom.popular <- predict(pred.popular, realMatrixTest, type="topNList")
+# store the results
+recom.popular <- as(recom.popular, "matrix")
+
+# 2.Random Search
+pred.random <- Recommender(realMatrixTrain, method = "RANDOM"); #names(getModel(pred.popular))
+# make prediction
+recom.random <- predict(pred.random, realMatrixTest, type="ratingMatrix")
+# store the results
+recom.random <- as(recom.random, "matrix")
+
+# 3. User-based filtering
+pred.UBCF <- Recommender(realMatrixTrain, method = "UBCF"); #names(getModel(pred.popular))
+# make prediction
+recom.UBCF <- predict(pred.UBCF, realMatrixTest, type="ratingMatrix")
+# store the results
+recom.UBCF <- as(recom.UBCF, "matrix")
+
+#####################################################################################
 ### Create Prediction for Testing Set
-validation <- data.frame(order_no = testing$order_no , order_date = testing$order_date, product_id = testing$product_id, obs = testing$target)
-validation$label <- ifelse(val.xgbTree$obs == 1,
+validation <- data.frame(order_no = testing$order_no , customer_id = testing$customer_id, product_id = testing$product_id, 
+                         obs = testing$target)
+validation$label <- ifelse(validation$obs == 1,
                             "Actual_outcome:Purchase", 
                             "Actual_outcome:Not_Purchase")
 
@@ -750,20 +846,21 @@ validation$pred.glmnFit <- predict(glmnFit, testing[,fullSet])
 # Model : Support Vector Machine - Radial Kernel Basis
 validation$prob.svmRFitFull <- predict(svmRFitFull, testing[,fullSet],type='prob')[,'Y']
 validation$pred.svmRFitFull <- predict(svmRFitFull, testing[,fullSet])
-s
+
 # Model : Support Vector Machine - Polynomial Kernel Basis
 validation$prob.svmPFitFull <- predict(svmPFitFull, testing[,fullSet],type='prob')[,'Y']
 validation$pred.svmPFitFull <- predict(svmPFitFull, testing[,fullSet])
 
-# Reformating data for interpreting the resutls
-validation$obs = factor(validation$obs,labels=c(0,1))
-validation$pred.xgbTree = factor(validation$pred.xgbTree,labels=c(0,1))
-validation$pred.nnetFit = factor(validation$pred.nnetFit,labels=c(0,1))
-validation$pred.nnetFit2 = factor(validation$pred.nnetFit2,labels=c(0,1))
-validation$pred.nnetFit3 = factor(validation$pred.nnetFit3,labels=c(0,1))
-validation$pred.nnetFit4 = factor(validation$pred.nnetFit4,labels=c(0,1))
-validation$pred.glmnFit = factor(validation$pred.glmnFit,labels=c(0,1))
-validation$pred.svmRFitFull = factor(validation$pred.svmRFitFull,labels=c(0,1))
-validation$pred.svmPFitFull = factor(validation$pred.svmPFitFull,labels=c(0,1))
+#Baseline models : Popular Items
+validation$pred.popular <-getAffinityScore(holder = recom.popular, test = validation[,c('customer_id','product_id')])
+validation$pred.popular[is.na(validation$pred.popular)] <- 0
+
+#Baseline models : Popular Items
+validation$pred.random <- getAffinityScore(holder = recom.random, test = validation[,c('customer_id','product_id')])
+validation$pred.random[is.na(validation$pred.random)] <- 0
+
+#Baseline models : User Item Based
+validation$pred.UBCF <- getAffinityScore(holder = recom.UBCF, test = validation[,c('customer_id','product_id')])
+validation$pred.UBCF[is.na(validation$pred.UBCF)] <- 0
 
 write.table(validation, paste('results/validation_allModels',nsample,'.seed',123,'.csv',sep=''), col.names = T, sep = ',')
